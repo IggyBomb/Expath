@@ -1,3 +1,4 @@
+import asyncio
 from bs4 import BeautifulSoup
 import config
 from playsound import playsound
@@ -8,6 +9,7 @@ import threading
 import discord
 from time import sleep
 import random
+import functools
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -51,6 +53,7 @@ async def print_listing(listing):
     print()
 
 async def send_discord_message(ele):
+    """ Sends a message on discord pinging me that a new listing is spotted"""
     channel = client.get_channel(525118950598639616)
     message = f'''<@284822134688186376>, new listing spotted!,
 **Addess** : {ele['address']},
@@ -60,12 +63,16 @@ async def send_discord_message(ele):
 
 
 async def save_pickle(data):
+    """ Saves data in the pickle """
+    print("Saving pickle!")
     file = open("pickle", "wb")
     pickle.dump(data, file)
     file.close()
 
 
 async def load_pickle():
+    """ Loads data from the pickle """
+    print("Loading pickle!")
     file = open("pickle", "rb")
     data = pickle.load(file)
     file.close()
@@ -77,23 +84,37 @@ async def alert_new_listing(new_listing):
     await send_discord_message(new_listing)
 
 async def main():
+    """ 
+    Scrapes new data
+    Compares with saved data
+    If a new listing is found, alert user!
+    Save scraped data over old data
+    """
+    print("running!")
     scraped_data = await scrape_latest()
     saved_data = await load_pickle()
-    
     for ele in scraped_data:
         if ele not in saved_data:
             await alert_new_listing(ele)
-
     #overwrite saved pickle with latest data
-    #save_pickle(scraped_data)
+    await save_pickle(scraped_data)
+    #loop
+    await asyncio.sleep(random.randint(60, 300))
+    await main()
+
+
+
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
-    while True:
-        await main()
-        #sleep between 1 and 5 minutes
-        sleep(random.randint(60, 300))
+    await asyncio.wait(await main())
+    #loop_main_p = functools.partial(loop_main)
+    #loop = asyncio.get_event_loop()
+    #loop.run_until_complete(asyncio.wait(loop_main_p))
+    #loop.close()
+    #await loop.run_in_executor(None, loop_main_p)
+    #await main()
 
 
 client.run(config.token)

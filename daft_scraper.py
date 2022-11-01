@@ -1,27 +1,16 @@
 import asyncio
 from bs4 import BeautifulSoup
 import config
-from playsound import playsound
 import re
 import requests
 import pickle
-import threading
 import discord
-from time import sleep
 import random
-import functools
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
-
-
-
-async def play_sound():  
-    playsound("./nuclear_launch.mp3", block = False)
-    #play = threading.Thread(target=playsound, args=('/home/kang/daft_scraper/nuclear_launch.mp3'))
-    #play.start()
 
 
 
@@ -64,7 +53,6 @@ async def send_discord_message(ele):
 
 async def save_pickle(data):
     """ Saves data in the pickle """
-    print("Saving pickle!")
     file = open("pickle", "wb")
     pickle.dump(data, file)
     file.close()
@@ -72,7 +60,6 @@ async def save_pickle(data):
 
 async def load_pickle():
     """ Loads data from the pickle """
-    print("Loading pickle!")
     file = open("pickle", "rb")
     data = pickle.load(file)
     file.close()

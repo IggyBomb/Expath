@@ -65,7 +65,7 @@ class Connection:
         
     
 
-    def insert_Listing_MySQL(self, listings, user_email):
+    def insert_Listing_MySQL(self, new_scraped_listings, user_email):
         """
         insert the data of the listings in the database and create a report with all the new found listings
         Parameters:
@@ -75,32 +75,65 @@ class Connection:
         connection = self.connect()
         cursor = connection.cursor()
         current_date = datetime.now()
-        added_listings = []
         
         insert_query = """
         INSERT INTO Listings (id, title, link, price, DateOfResearch,  NumberOfBedRooms, PropertyType, SellerName, user_email)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        for listing in listings:
+        database_listings = self.get_existing_listings_id(user_email)
+        to_add_listings = self.listings_for_database(new_scraped_listings, database_listings)
+        for listing in to_add_listings:
             try:
                 cursor.execute(insert_query, (listing.id, listing.title, listing.path, listing.price, current_date, listing.nb_bedrooms, listing.property_type, listing.seller_name, user_email))
-                added_listings.append(listing)
                 print(f"Inserted listing successfully: \nID: {listing.id}, \n \n")
                 
             except Error as e:
                 print(f"Error : {e}")
                 
-        if added_listings: 
-            self.create_report(added_listings, user_email) 
+        if to_add_listings: 
+            self.create_report(to_add_listings, user_email) 
         else:
             print("No new listings after the scraping.")
-    
+            
         connection.commit()
         cursor.close()
         self.close_connection()
+        
+    #get the listings id already in the database
+    def get_existing_listings_id(self, user_email):
+        """
+        Get the listings id already in the database
+        Parameters:
+        user_email (str): the email of the user
+        """
+        connection = self.connect()
+        cursor = connection.cursor()
+        select_query = f"""SELECT id
+                           FROM Listings
+                           WHERE user_email = '{user_email}'"""
+        cursor.execute(select_query)
+        existing_listings = cursor.fetchall()
+        cursor.close()
+        self.close_connection()
+        return existing_listings
+    
+    
+    #find the new listings in the scraped data that are not already in the database
+    def listings_for_database(self, new_scraped_listings, old_listings):
+        """
+        Compare the new listings found from scraping with the old ones and return the new listings that are not in the database
+        """
+        listings_to_insert = []
+        # Convert the list to a set for faster comparison
+        old_listings_set = set(old_listings)
+        for listing in new_scraped_listings:
+            if listing.id not in old_listings_set:
+                listings_to_insert.append(listing)
+        return listings_to_insert
+        
     
 
-    def create_report(added_listings, user_email):
+    def create_report(self, added_listings, user_email):
         """Create a new report with the new listings found on the website.
         Parameters:
         added_listings (list): A list of listings objects.

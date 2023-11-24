@@ -8,9 +8,28 @@ from mysql.connector import Error
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 sys.path.append(parent_dir)
 from Connection import Connection
+from Listing import Listing
 
 connection_instance = Connection()
 
+Listing1 = Listing("5497479","Brighton Square,Rathgar, Dublin 6, Terenure", "€1,100 per month", "x", "x", "x", "x", "x")
+Listing2 = Listing("5500037", "Apartment 2, Mobhi Court, Glasnevin, Dublin 9", "€1,469 per month", "x", "x", "x", "x", "x")
+Listing3 = Listing("5492666", "9 Portland Street North, Dublin 1, Drumcondra", "€1,200 per month", "x", "x", "x", "x", "x")
+Listing4 = Listing("5489933", "31 Wood Dale Drive, Ballycullen", "€1,380 per month", "x", "x", "x", "x", "x")
+
+old_listings = [Listing1.id, Listing2.id, Listing3.id]
+new_scraped_listings = {Listing1, Listing2, Listing3, Listing4}
+def get_new_listings(self, new_listings, old_listings):
+    """
+    confront the new listings found from scraping with the old ones and return the new listings that are not in the database
+    """
+    listings_to_insert = []
+    #convert the list a set for a faster comparison
+    old_listings_set = set(old_listings)
+    for listing in new_listings:
+        if listing['id'] not in old_listings_set:
+            listings_to_insert.append(listing)
+    return listings_to_insert
 
 class TestConnection(unittest.TestCase):
 
@@ -38,6 +57,13 @@ class TestConnection(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIsNone(conn.connection)
 
+    @patch('Connection.mysql.connector.connect', autospec=True)
+    def test_listings_for_database(self, mock_connect):
+        mock_connect.return_value = MagicMock(name='connection')
+        conn = Connection()
+        conn.connect()
+        result = conn.listings_for_database(new_scraped_listings, old_listings)
+        self.assertEqual(result, [Listing4])
 
 if __name__ == '__main__':
     unittest.main()

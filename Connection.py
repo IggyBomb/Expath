@@ -16,8 +16,10 @@ id_set_lock = Lock()
 class Connection:
     def __init__(self):
         self.connection = None
+        """
         print(os.environ.get('DB_PASSWORD'))
         print(os.environ.get('Expath_host'))
+        """
         # Set the configuration to connect to MySQL
         self.config = {
             'user': 'admin',
@@ -109,20 +111,19 @@ class Connection:
         self.initialize_listings_IDs_set()
         filtered_listings = self.filter_new_listings(new_scraped_listings)
 
-        try:
-            for listing in filtered_listings:
+        for listing in filtered_listings:
+            try:
                 cursor.execute(insert_query, (listing.id, listing.title, listing.path, listing.price, current_date, listing.nb_bedrooms, listing.property_type, listing.seller_name))
                 connection.commit()
                 print(f"Inserted listing successfully: ID: {listing.id} - Title: {listing.title}")
-        except mysql.connector.Error as e:
-            if e.errno == 1062:  # Duplicate entry error code
-                print(f"Ignored duplicate entry for ID: {listing.id}")
-            else:
-                print(f"Error : {e}")
-        finally:
-            cursor.close()
-            self.close_connection()
-            print("finished")
+            except mysql.connector.Error as e:
+                if e.errno == 1062:  # Duplicate entry error code
+                    print(f"Ignored duplicate entry for ID: {listing.id}")
+                else:
+                    print(f"Error : {e}")
+        cursor.close()
+        self.close_connection()
+        print("finished")
         
             
             
@@ -134,14 +135,17 @@ class Connection:
         connection = self.connect()
         cursor = connection.cursor()
         to_remove_ids = self.filter_non_existing_listings(scraped_listings)
+        print(f"Removing {len(to_remove_ids)} listings from the database." )
+        
         delete_query = "DELETE FROM Listings WHERE id = %s"
         try:
             for listing_id in to_remove_ids:
-                cursor.execute(delete_query, (listing_id))
+                cursor.execute(delete_query, (listing_id,))
                 print(f"Listing removed - ID : {listing_id}")
                 connection.commit()
         except Error as e:
             print(f"Error while removing listings: {e}")
+        
             
             
         
@@ -158,6 +162,7 @@ class Connection:
             for listing in new_scraped_listings:
                 if listing.id not in id_set:
                     new_listings.append(listing)
+        print(f"Found {len(new_listings)} new listings.")
         return new_listings
     
     
@@ -170,11 +175,17 @@ class Connection:
         """
         self.initialize_listings_IDs_set()
         non_existing_listings = []
-        new_id_set = {listing.id for listing in scraped_listings}
+        new_id_set = set()
+        for listing in scraped_listings:
+            id = str(listing.id)
+            new_id_set.add(id)
         old_id_set = id_set
+        print(f"Found {len(old_id_set)} listings in the database.")
+        print(f"Found {len(new_id_set)} listings on the website.")
 
         # Get the IDs that are in old_id_set but not in new_id_set
         non_existing_ids = old_id_set - new_id_set
+        print(f"Found {len(non_existing_ids)} non-existing listings.")
         return non_existing_ids
 
 

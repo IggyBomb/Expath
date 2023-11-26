@@ -47,6 +47,7 @@ class TestConnection(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIsNone(conn.connection)
 
+    
     @patch('Connection.mysql.connector.connect', autospec=True)
     def test_listings_for_database(self, mock_connect):
         mock_connect.return_value = MagicMock(name='connection')

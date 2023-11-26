@@ -7,42 +7,89 @@ import aioconsole
 import json
 from Listing import Listing
 from Connection import Connection
+import urllib.parse
 
+"""
 
-
- #function to define the parameters of the research
-async def scrape_properties():
+#function to define the parameters of the research
+async def scrape_properties(rentMax, RentMin):
+""""""Insert a new user in the database
+    Parameters: RentMax(float), RentMin(float)
+    """"""
     while True:
         rentMax = await aioconsole.ainput("Price max: ")
         rentMin = await aioconsole.ainput("Price min: ")
-
-        if rentMax and rentMin:
-            try:
-                rentMax = float(rentMax)
-                rentMin = float(rentMin)
-                if rentMax>=rentMin:
-                    page_size = 20
-                    start_index = 0
-                    complete_listings = []
-                    while True:
-                        URL = f"https://www.daft.ie/property-for-rent/dublin-city?rentalPrice_from={rentMin}&rentalPrice_to={rentMax}&pageSize={page_size}&from={start_index}"
-                        print(URL)
-                        listings = await scrape_latest(URL)
-                        if not listings:
-                            break
-                        complete_listings.extend(listings)
-                        start_index += page_size
-                    break
-                else:
-                    print("the max Rent has to be bigger than the min Rent")
-            except ValueError:
-                print("Please enter valid numbers for price max and min.")
+        try:
+            rentMax = float(rentMax)
+            rentMin = float(rentMin)
+            if rentMax>=rentMin:
+                page_size = 20
+                start_index = 0
+                complete_listings = []
+                while True:
+                    URL = f"https://www.daft.ie/property-for-rent/dublin-city?rentalPrice_from={rentMin}&rentalPrice_to={rentMax}&pageSize={page_size}&from={start_index}"
+                    print(URL)
+                    listings = await scrape_latest(URL)
+                    if not listings:
+                        break
+                    complete_listings.extend(listings)
+                    start_index += page_size
+                break
+            else:
+                print("the max Rent has to be bigger than the min Rent")
+        except ValueError:
+            print("Please enter valid numbers for price max and min.")
     complete_list_elements = len(complete_listings)
-    print("Number of objects in the JSON: " +str(complete_list_elements))
     listings_objects = listings_to_objects(complete_listings)
     print("Number of objects in the list: " + str(len(listings_objects)))
     return listings_objects
 
+"""
+
+async def scrape_properties(rentMax, rentMin):
+    """Scrape properties within the specified rent range with input validation.
+    Parameters: 
+    rentMax (float): Maximum rent.
+    rentMin (float): Minimum rent.
+    """
+    
+    # Input validation
+    try:
+        rentMax = float(rentMax)
+        rentMin = float(rentMin)
+    except ValueError:
+        print("Both rentMax and rentMin must be numbers.")
+        return []
+
+    if rentMax < rentMin:
+        print("The max Rent has to be bigger than the min Rent.")
+        return []
+
+    page_size = 20
+    start_index = 0
+    complete_listings = []
+
+    while True:
+        # URL encoding parameters
+        params = {
+            "rentalPrice_from": rentMin,
+            "rentalPrice_to": rentMax,
+            "pageSize": page_size,
+            "from": start_index
+        }
+        query_string = urllib.parse.urlencode(params)
+        URL = f"https://www.daft.ie/property-for-rent/dublin-city?{query_string}"
+        
+        print(URL)
+        listings = await scrape_latest(URL)
+        if not listings:
+            break
+        complete_listings.extend(listings)
+        start_index += page_size
+
+    listings_objects = listings_to_objects(complete_listings)
+    print("Number of objects in the list: " + str(len(listings_objects)))
+    return listings_objects
 
 
 # Function for scraping daft.ie

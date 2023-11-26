@@ -3,10 +3,15 @@ from mysql.connector import Error
 from flask import Flask
 import os
 from datetime import datetime
+from threading import Lock
 
 
 #create an instance of flask
 app = Flask(__name__)
+
+# Static set and lock for thread safety
+id_set = set()
+id_set_lock = Lock()
 
 class Connection:
     def __init__(self):
@@ -62,76 +67,116 @@ class Connection:
         finally:
             cursor.close()
             connection.close()
+    
+    
+    def initialize_listings_IDs_set(self):
+        """
+        Initialize the listings IDs set by fetching the IDs from the database and storing them in a static set.
+        """
+        global id_set
+        try:
+            connection = self.connect()
+            cursor = connection.cursor()
+            select_query = "SELECT id FROM Listings"
+            cursor.execute(select_query)
+            ids = cursor.fetchall()
+            with id_set_lock:
+                id_set = {id_tuple[0] for id_tuple in ids}
+            print("Listings IDs set initialized successfully.")
+        except Error as e:
+            print(f"Error while initializing listings IDs set: {e}")
+        finally:
+            cursor.close()
+            self.close_connection()
         
     
 
-    def insert_Listing_MySQL(self, new_scraped_listings, user_email):
+    def insert_new_listings_into_database(self, new_scraped_listings):
         """
-        insert the data of the listings in the database and create a report with all the new found listings
+        Insert the data of all the new listings into the database.
         Parameters:
-        listings (list): list of objects Listings
-        user_email (str): the email of the user
+        new_scraped_listings (list): List of new Listing objects.
         """
         connection = self.connect()
         cursor = connection.cursor()
         current_date = datetime.now()
-        
+    
         insert_query = """
-        INSERT INTO Listings (id, title, link, price, DateOfResearch,  NumberOfBedRooms, PropertyType, SellerName, user_email)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO Listings (id, title, link, price, DateOfResearch, NumberOfBedRooms, PropertyType, SellerName)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        database_listings = self.get_existing_listings_id(user_email)
-        to_add_listings = self.listings_for_database(new_scraped_listings, database_listings)
-        for listing in to_add_listings:
-            try:
-                cursor.execute(insert_query, (listing.id, listing.title, listing.path, listing.price, current_date, listing.nb_bedrooms, listing.property_type, listing.seller_name, user_email))
-                print(f"Inserted listing successfully: \nID: {listing.id}, \n \n")
-                
-            except Error as e:
+    
+        self.initialize_listings_IDs_set()
+        filtered_listings = self.filter_new_listings(new_scraped_listings)
+
+        try:
+            for listing in filtered_listings:
+                cursor.execute(insert_query, (listing.id, listing.title, listing.path, listing.price, current_date, listing.nb_bedrooms, listing.property_type, listing.seller_name))
+                connection.commit()
+                print(f"Inserted listing successfully: ID: {listing.id} - Title: {listing.title}")
+        except mysql.connector.Error as e:
+            if e.errno == 1062:  # Duplicate entry error code
+                print(f"Ignored duplicate entry for ID: {listing.id}")
+            else:
                 print(f"Error : {e}")
-                
-        if to_add_listings: 
-            self.create_report(to_add_listings, user_email) 
-        else:
-            print("No new listings after the scraping.")
-            
-        connection.commit()
-        cursor.close()
-        self.close_connection()
+        finally:
+            cursor.close()
+            self.close_connection()
+            print("finished")
         
-    #get the listings id already in the database
-    def get_existing_listings_id(self, user_email):
-        """
-        Get the listings id already in the database
-        Parameters:
-        user_email (str): the email of the user
+            
+            
+    
+    def remove_non_existing_listings_from_database(self, scraped_listings):
+        """remove the listings in the database that are not on the website anymore.
+        Parameters: scraped_listings (list): A list of Listing objects.
         """
         connection = self.connect()
         cursor = connection.cursor()
-        select_query = f"""SELECT id
-                           FROM Listings
-                           WHERE user_email = '{user_email}'"""
-        cursor.execute(select_query)
-        existing_listings = cursor.fetchall()
-        cursor.close()
-        self.close_connection()
-        return existing_listings
-    
-    
-    #find the new listings in the scraped data that are not already in the database
-    def listings_for_database(self, new_scraped_listings, old_listings):
-        """
-        Compare the new listings found from scraping with the old ones and return the new listings that are not in the database
-        """
-        listings_to_insert = []
-        # Convert the list to a set for faster comparison
-        old_listings_set = set(old_listings)
-        for listing in new_scraped_listings:
-            if listing.id not in old_listings_set:
-                listings_to_insert.append(listing)
-        return listings_to_insert
+        to_remove_ids = self.filter_non_existing_listings(scraped_listings)
+        delete_query = "DELETE FROM Listings WHERE id = %s"
+        try:
+            for listing_id in to_remove_ids:
+                cursor.execute(delete_query, (listing_id))
+                print(f"Listing removed - ID : {listing_id}")
+                connection.commit()
+        except Error as e:
+            print(f"Error while removing listings: {e}")
+            
+            
         
+    def filter_new_listings(self, new_scraped_listings):
+        """
+        Compare the new listings found from scraping with the existing ones in the global ID set and
+        return a list of Listing objects that are not in the database.
+
+        Parameters:
+        new_scraped_listings (list): A list of Listing objects to be checked against the database.
+        """
+        new_listings = []
+        with id_set_lock:
+            for listing in new_scraped_listings:
+                if listing.id not in id_set:
+                    new_listings.append(listing)
+        return new_listings
     
+    
+    
+    def filter_non_existing_listings(self, scraped_listings):
+        """ 
+        Compare the listings in the database with the scraped listings and
+        return a list of Listing objects that are not in the database.
+        Parameter : scraped_listings (list): A list of Listing objects to be checked against the database.
+        """
+        self.initialize_listings_IDs_set()
+        non_existing_listings = []
+        new_id_set = {listing.id for listing in scraped_listings}
+        old_id_set = id_set
+
+        # Get the IDs that are in old_id_set but not in new_id_set
+        non_existing_ids = old_id_set - new_id_set
+        return non_existing_ids
+
 
     def create_report(self, added_listings, user_email):
         """Create a new report with the new listings found on the website.

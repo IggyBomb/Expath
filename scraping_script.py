@@ -11,7 +11,7 @@ from Connection import Connection
 
 
  #function to define the parameters of the research
-async def scrape_properties(user_email):
+async def scrape_properties():
     while True:
         rentMax = await aioconsole.ainput("Price max: ")
         rentMin = await aioconsole.ainput("Price min: ")
@@ -39,7 +39,7 @@ async def scrape_properties(user_email):
                 print("Please enter valid numbers for price max and min.")
     complete_list_elements = len(complete_listings)
     print("Number of objects in the JSON: " +str(complete_list_elements))
-    listings_objects = listings_to_objects(complete_listings, user_email)
+    listings_objects = listings_to_objects(complete_listings)
     print("Number of objects in the list: " + str(len(listings_objects)))
     return listings_objects
 
@@ -107,7 +107,7 @@ def remove_duplicate_data(listings):
 
 
 #Transforms every listing of a JSON in an object and stores them in a list
-def listings_to_objects(unique_listings, user_email):
+def listings_to_objects(unique_listings):
     listings_objects = []
     for listing in unique_listings:
         listing_instance = Listing(
@@ -118,7 +118,6 @@ def listings_to_objects(unique_listings, user_email):
             nb_bedrooms = listing['numBedrooms'], 
             property_type = listing['propertyType'],
             seller_name = listing['sellerName'],
-            user_email = user_email
         )
         listings_objects.append(listing_instance)
     return listings_objects
